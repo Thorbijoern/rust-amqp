@@ -51,7 +51,7 @@ impl Consumer for Box<Consumer>
 }
 
 pub struct Channel {
-    id: u16,
+    pub id: u16,
     consumers: Rc<RefCell<HashMap<String, Box<Consumer>>>>,
     receiver: Receiver<AMQPResult<Frame>>,
     connection: Connection,
