@@ -55,7 +55,7 @@ pub struct Channel {
     consumers: Rc<RefCell<HashMap<String, Box<Consumer>>>>,
     receiver: Receiver<AMQPResult<Frame>>,
     connection: Connection,
-    control: Arc<AtomicBool>
+    pub control: Arc<AtomicBool>
 }
 
 unsafe impl Send for Channel {}
