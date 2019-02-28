@@ -1,8 +1,8 @@
 use amqp_error::{AMQPResult, AMQPError};
 use std::sync::mpsc::Receiver;
 
-use framing::{MethodFrame, ContentHeaderFrame, Frame, FrameType};
-use table::Table;
+use amq_proto::{MethodFrame, ContentHeaderFrame, Frame, FramePayload, FrameType, EncodedProperties};
+use amq_proto::Table;
 use protocol;
 use basic::{Basic, GetIterator};
 use protocol::{channel, basic};
@@ -13,7 +13,7 @@ use connection::Connection;
 use std::collections::HashMap;
 use std::cell::RefCell;
 use std::rc::Rc;
-use method::Method;
+use amq_proto::Method;
 
 pub trait Consumer: Send {
     fn handle_delivery(&mut self,
@@ -23,12 +23,9 @@ pub trait Consumer: Send {
                        body: Vec<u8>);
 }
 
-pub type ConsumerCallBackFn = fn(channel: &mut Channel,
-                                 method: basic::Deliver,
-                                 headers: BasicProperties,
-                                 body: Vec<u8>);
-
-impl Consumer for ConsumerCallBackFn {
+impl<F> Consumer for F
+    where F: FnMut(&mut Channel, basic::Deliver, BasicProperties, Vec<u8>) + Send + 'static
+{
     fn handle_delivery(&mut self,
                        channel: &mut Channel,
                        method: basic::Deliver,
@@ -38,15 +35,14 @@ impl Consumer for ConsumerCallBackFn {
     }
 }
 
-impl<T> Consumer for Box<T>
-    where T: FnMut(&mut Channel, basic::Deliver, BasicProperties, Vec<u8>) + Send
+impl Consumer for Box<Consumer>
 {
     fn handle_delivery(&mut self,
                        channel: &mut Channel,
                        method: basic::Deliver,
                        headers: BasicProperties,
                        body: Vec<u8>) {
-        self(channel, method, headers, body);
+        (**self).handle_delivery(channel, method, headers, body);
     }
 }
 
@@ -107,11 +103,7 @@ impl Channel {
     {
         debug!("Sending method {} to channel {}", method.name(), self.id);
         let id = self.id;
-        self.write(Frame {
-            frame_type: FrameType::METHOD,
-            channel: id,
-            payload: try!(method.encode_method_frame()),
-        })
+        self.write(method.to_frame(id)?)
     }
 
     // Send method frame, receive method frame, try to return expected method frame
@@ -122,7 +114,7 @@ impl Channel {
     {
         let method_frame = try!(self.raw_rpc(method));
         match method_frame.method_name() {
-            m_name if m_name == expected_reply => Method::decode(method_frame),
+            m_name if m_name == expected_reply => Method::decode(method_frame).map_err(From::from),
             m_name => {
                 Err(AMQPError::Protocol(format!("Unexpected method frame: {}, expected: {}",
                                                 m_name,
@@ -136,17 +128,17 @@ impl Channel {
         where T: Method
     {
         try!(self.send_method_frame(method));
-        MethodFrame::decode(&try!(self.read()))
+        MethodFrame::decode(&try!(self.read())).map_err(From::from)
     }
 
     pub fn read_headers(&mut self) -> AMQPResult<ContentHeaderFrame> {
-        ContentHeaderFrame::decode(&try!(self.read()))
+        ContentHeaderFrame::decode(&try!(self.read())).map_err(From::from)
     }
 
     pub fn read_body(&mut self, size: u64) -> AMQPResult<Vec<u8>> {
         let mut body = Vec::with_capacity(size as usize);
         while body.len() < size as usize {
-            body.extend(try!(self.read()).payload.into_iter())
+            body.extend(try!(self.read()).payload.into_inner().into_iter())
         }
         Ok(body)
     }
@@ -356,6 +348,14 @@ impl<'a> Basic<'a> for Channel {
                         -> AMQPResult<()>
         where S: Into<String>
     {
+        if mandatory {
+            warn!("basic_publish(mandatory=true) failures are not handled and result in blocked channels!");
+        }
+
+        if immediate {
+            warn!("basic_publish(immediate=true) failures are not handled and result in blocked channels!");
+        }
+
         let publish = &Publish {
             ticket: 0,
             exchange: exchange.into(),
@@ -369,17 +369,17 @@ impl<'a> Basic<'a> for Channel {
             weight: 0,
             body_size: content.len() as u64,
             properties_flags: properties_flags,
-            properties: try!(properties.encode()),
+            properties: EncodedProperties::new(properties.encode()?),
         };
         let content_header_frame = Frame {
             frame_type: FrameType::HEADERS,
             channel: self.id,
-            payload: try!(content_header.encode()),
+            payload: FramePayload::new(content_header.encode()?),
         };
         let content_frame = Frame {
             frame_type: FrameType::BODY,
             channel: self.id,
-            payload: content,
+            payload: FramePayload::new(content),
         };
 
         try!(self.send_method_frame(publish));
