@@ -90,8 +90,8 @@ impl<'a> Iterator for GetIterator<'a> {
                 let properties = BasicProperties::decode(headers).ok().unwrap();
                 Some(GetResult {
                     headers: properties,
-                    reply: reply,
-                    body: body,
+                    reply,
+                    body,
                     ack_sender: self.ack_sender.clone(),
                 })
             }
@@ -118,9 +118,9 @@ impl<'a> GetIterator<'a> {
     pub fn new(channel: &'a mut Channel, queue: &'a str, no_ack: bool) -> Self {
         let (tx, rx) = sync_channel::<AckAction>(1);
         GetIterator {
-            channel: channel,
-            queue: queue,
-            no_ack: no_ack,
+            channel,
+            queue,
+            no_ack,
             ack_receiver: rx,
             ack_sender: tx,
         }

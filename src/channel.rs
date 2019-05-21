@@ -63,11 +63,11 @@ unsafe impl Send for Channel {}
 impl Channel {
     pub fn new(id: u16, receiver: Receiver<AMQPResult<Frame>>, connection: Connection, control: Arc<AtomicBool>) -> Channel {
         Channel {
-            id: id,
-            receiver: receiver,
+            id,
+            receiver,
             consumers: Rc::new(RefCell::new(HashMap::new())),
-            connection: connection,
-            control: control,
+            connection,
+            control,
         }
     }
 
@@ -79,7 +79,7 @@ impl Channel {
         where T: Into<String>
     {
         let close = &channel::Close {
-            reply_code: reply_code,
+            reply_code,
             reply_text: reply_text.into(),
             class_id: 0,
             method_id: 0,
@@ -182,12 +182,12 @@ impl Channel {
             ticket: 0,
             exchange: exchange.into(),
             _type: _type.into(),
-            passive: passive,
-            durable: durable,
-            auto_delete: auto_delete,
-            internal: internal,
-            nowait: nowait,
-            arguments: arguments,
+            passive,
+            durable,
+            auto_delete,
+            internal,
+            nowait,
+            arguments,
         };
         self.rpc(&declare, "exchange.declare-ok")
     }
@@ -206,7 +206,7 @@ impl Channel {
             source: source.into(),
             routing_key: routing_key.into(),
             nowait: false,
-            arguments: arguments,
+            arguments,
         };
         self.rpc(&bind, "exchange.bind-ok")
     }
@@ -225,12 +225,12 @@ impl Channel {
         let declare = protocol::queue::Declare {
             ticket: 0,
             queue: queue.into(),
-            passive: passive,
-            durable: durable,
-            exclusive: exclusive,
-            auto_delete: auto_delete,
-            nowait: nowait,
-            arguments: arguments,
+            passive,
+            durable,
+            exclusive,
+            auto_delete,
+            nowait,
+            arguments,
         };
         self.rpc(&declare, "queue.declare-ok")
     }
@@ -249,8 +249,8 @@ impl Channel {
             queue: queue.into(),
             exchange: exchange.into(),
             routing_key: routing_key.into(),
-            nowait: nowait,
-            arguments: arguments,
+            nowait,
+            arguments,
         };
         self.rpc(&bind, "queue.bind-ok")
     }
@@ -356,11 +356,11 @@ impl<'a> Basic<'a> for Channel {
             ticket: 0,
             queue: queue.into(),
             consumer_tag: consumer_tag.into(),
-            no_local: no_local,
-            no_ack: no_ack,
-            exclusive: exclusive,
-            nowait: nowait,
-            arguments: arguments,
+            no_local,
+            no_ack,
+            exclusive,
+            nowait,
+            arguments,
         };
         let reply: ConsumeOk = try!(self.rpc(consume, "basic.consume-ok"));
         self.consumers.borrow_mut().insert(reply.consumer_tag.clone(), Box::new(callback));
@@ -389,15 +389,15 @@ impl<'a> Basic<'a> for Channel {
             ticket: 0,
             exchange: exchange.into(),
             routing_key: routing_key.into(),
-            mandatory: mandatory,
-            immediate: immediate,
+            mandatory,
+            immediate,
         };
         let properties_flags = properties.flags();
         let content_header = ContentHeaderFrame {
             content_class: 60,
             weight: 0,
             body_size: content.len() as u64,
-            properties_flags: properties_flags,
+            properties_flags,
             properties: EncodedProperties::new(properties.encode()?),
         };
         let content_header_frame = Frame {
@@ -419,24 +419,24 @@ impl<'a> Basic<'a> for Channel {
 
     fn basic_ack(&mut self, delivery_tag: u64, multiple: bool) -> AMQPResult<()> {
         self.send_method_frame(&Ack {
-            delivery_tag: delivery_tag,
-            multiple: multiple,
+            delivery_tag,
+            multiple,
         })
     }
 
     // Rabbitmq specific
     fn basic_nack(&mut self, delivery_tag: u64, multiple: bool, requeue: bool) -> AMQPResult<()> {
         self.send_method_frame(&Nack {
-            delivery_tag: delivery_tag,
-            multiple: multiple,
-            requeue: requeue,
+            delivery_tag,
+            multiple,
+            requeue,
         })
     }
 
     fn basic_reject(&mut self, delivery_tag: u64, requeue: bool) -> AMQPResult<()> {
         self.send_method_frame(&Reject {
-            delivery_tag: delivery_tag,
-            requeue: requeue,
+            delivery_tag,
+            requeue,
         })
     }
 
@@ -450,17 +450,17 @@ impl<'a> Basic<'a> for Channel {
                  global: bool)
                  -> AMQPResult<QosOk> {
         let qos = &Qos {
-            prefetch_size: prefetch_size,
-            prefetch_count: prefetch_count,
-            global: global,
+            prefetch_size,
+            prefetch_count,
+            global,
         };
         self.rpc(qos, "basic.qos-ok")
     }
 
-    fn basic_cancel(&mut self, consumer_tag: String, no_wait: bool) -> AMQPResult<CancelOk> {
+    fn basic_cancel(&mut self, consumer_tag: String, nowait: bool) -> AMQPResult<CancelOk> {
         let cancel = &Cancel {
-            consumer_tag: consumer_tag,
-            nowait: no_wait,
+            consumer_tag,
+            nowait,
         };
         self.rpc(cancel, "basic.cancel-ok")
     }

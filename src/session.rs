@@ -19,6 +19,7 @@ use std::sync::atomic::AtomicBool;
 
 use url::{Url, percent_encoding};
 
+#[allow(dead_code)]
 pub const AMQPS_PORT: u16 = 5671;
 pub const AMQP_PORT: u16 = 5672;
 
@@ -53,7 +54,7 @@ impl Default for Options {
             vhost: "/".to_string(),
             login: "guest".to_string(),
             password: "guest".to_string(),
-            frame_max_limit: 131072,
+            frame_max_limit: 131_072,
             channel_max_limit: 65535,
             locale: "en_US".to_string(),
             scheme: AMQPScheme::AMQP,
@@ -106,11 +107,11 @@ impl Session {
         let channels_clone = channels.clone();
         thread::spawn(|| Session::reading_loop(con1, channels_clone));
         let mut session = Session {
-            connection: connection,
-            channels: channels,
+            connection,
+            channels,
             channel_max_limit: 65535,
-            channel_zero: channel_zero,
-            control: control,
+            channel_zero,
+            control,
         };
         try!(session.init(options));
         Ok(session)
@@ -153,7 +154,7 @@ impl Session {
 
         debug!("Sending connection.start-ok");
         let start_ok = protocol::connection::StartOk {
-            client_properties: client_properties,
+            client_properties,
             mechanism: "PLAIN".to_owned(),
             response: format!("\0{}\0{}", options.login, options.password),
             locale: options.locale.to_owned(),
@@ -236,8 +237,8 @@ impl Session {
                reply_code,
                reply_text);
         let close = protocol::connection::Close {
-            reply_code: reply_code,
-            reply_text: reply_text,
+            reply_code,
+            reply_text,
             class_id: 0,
             method_id: 0,
         };
@@ -343,7 +344,7 @@ fn parse_url(url_string: &str) -> AMQPResult<Options> {
     let port = url.port().unwrap_or(default_port);
 
     let path = url.path();
-    let vhost = if path.len() == 1 && !url_string.ends_with("/") {
+    let vhost = if path.len() == 1 && !url_string.ends_with('/') {
         &default.vhost
     } else {
         &path[1..]
@@ -357,10 +358,10 @@ fn parse_url(url_string: &str) -> AMQPResult<Options> {
 
     Ok(Options {
         host: host.to_string(),
-        port: port,
-        scheme: scheme,
-        login: login,
-        password: password,
+        port,
+        scheme,
+        login,
+        password,
         vhost: vhost.to_string(),
         ..default
     })

@@ -48,7 +48,7 @@ impl Connection {
         try!(init_connection(&mut tls_socket));
         Ok(Connection {
             socket: AMQPStream::Tls(tls_socket),
-            frame_max_limit: 131072,
+            frame_max_limit: 131_072,
         })
     }
 
@@ -57,7 +57,7 @@ impl Connection {
         try!(init_connection(&mut socket));
         Ok(Connection {
             socket: AMQPStream::Cleartext(socket),
-            frame_max_limit: 131072,
+            frame_max_limit: 131_072,
         })
     }
 
