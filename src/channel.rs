@@ -88,19 +88,14 @@ impl Channel {
     }
 
     /// Will block until it reads a frame, other than `basic.deliver`.
-    pub fn read<T: Into<Option<u64>>>(&mut self, timeout: T) -> AMQPResult<Frame> {
+    pub fn read(&mut self, timeout: u64) -> AMQPResult<Frame> {
         let mut unprocessed_frame = None;
-        let to_duration: Duration;
-        match timeout.clone().into() {
-            None => to_duration = Duration::new(0, 0),
-            Some(x) => to_duration = Duration::from_secs(x)
-        }
         let start = Instant::now();
 
         while self.control.load(Ordering::Relaxed) && unprocessed_frame.is_none() {
-            match () {
-                _ if (timeout.into() == None) => {},
-                _ if (to_duration > start.elapsed()) => return Err(AMQPError::Protocol("timed out".to_owned())),
+            match timeout {
+                0 => {},
+                x if (Duration::from_secs(x) < start.elapsed()) => return Err(AMQPError::Protocol("timed out".to_owned())),
                 _ => {}
             }
             match self.receiver.try_recv() {
@@ -156,17 +151,17 @@ impl Channel {
         where T: Method
     {
         try!(self.send_method_frame(method));
-        MethodFrame::decode(&try!(self.read(None))).map_err(From::from)
+        MethodFrame::decode(&try!(self.read(0))).map_err(From::from)
     }
 
     pub fn read_headers(&mut self) -> AMQPResult<ContentHeaderFrame> {
-        ContentHeaderFrame::decode(&try!(self.read(None))).map_err(From::from)
+        ContentHeaderFrame::decode(&try!(self.read(0))).map_err(From::from)
     }
 
     pub fn read_body(&mut self, size: u64) -> AMQPResult<Vec<u8>> {
         let mut body = Vec::with_capacity(size as usize);
         while body.len() < size as usize {
-            body.extend(try!(self.read(None)).payload.into_inner().into_iter())
+            body.extend(try!(self.read(0)).payload.into_inner().into_iter())
         }
         Ok(body)
     }
@@ -266,13 +261,13 @@ impl Channel {
 
     // Will run the infinite loop, which will receive frames on the given channel &
     // call consumers.
-    pub fn start_consuming<T: Into<Option<u64>>>(&mut self, timeout: T) {
+    pub fn start_consuming(&mut self, timeout: u64) -> AMQPResult<()> {
         while self.control.load(Ordering::Relaxed) {
-            if let Err(err) = self.read(&timeout.into().unwrap().clone()) {
-                error!("Error consuming {:?}", err);
-                return;
+            if let Err(err) = self.read(timeout) {
+                return Err(AMQPError::Protocol(format!("Error consuming {:?}", err).to_owned()));
             }
         }
+        Ok(())
     }
 
     fn try_consume(&mut self, frame: Frame) -> AMQPResult<Option<Frame>> {

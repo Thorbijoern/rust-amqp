@@ -118,7 +118,7 @@ impl Session {
 
     fn init(&mut self, options: Options) -> AMQPResult<()> {
         debug!("Starting init session");
-        let frame = try!(self.channel_zero.read(None)); //Start
+        let frame = try!(self.channel_zero.read(0)); //Start
         let method_frame = try!(MethodFrame::decode(&frame));
         let start: protocol::connection::Start = match method_frame.method_name() {
             "connection.start" => try!(Method::decode(method_frame)),
