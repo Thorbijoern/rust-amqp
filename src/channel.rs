@@ -95,7 +95,7 @@ impl Channel {
         while self.control.load(Ordering::Relaxed) && unprocessed_frame.is_none() {
             match timeout {
                 0 => {},
-                x if (Duration::from_secs(x) < start.elapsed()) => return Err(AMQPError::Protocol("timed out".to_owned())),
+                x if (Duration::from_secs(x) < start.elapsed()) => return Err(AMQPError::TimeoutError),
                 _ => {}
             }
             match self.receiver.try_recv() {
@@ -264,7 +264,13 @@ impl Channel {
     pub fn start_consuming(&mut self, timeout: u64) -> AMQPResult<()> {
         while self.control.load(Ordering::Relaxed) {
             if let Err(err) = self.read(timeout) {
-                return Err(AMQPError::Protocol(format!("Error consuming {:?}", err).to_owned()));
+                match err {
+                    AMQPError::TimeoutError => return Err(AMQPError::Protocol(format!("Error consuming {:?}", err).to_owned())),
+                    _ => {
+                            error!("Error consuming {:?}", err);
+                            return Ok(());
+                    }
+                }
             }
         }
         Ok(())

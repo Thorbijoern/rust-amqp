@@ -8,6 +8,7 @@ use openssl;
 
 #[derive(Debug, Clone)]
 pub enum AMQPError {
+    TimeoutError,
     IoError(io::ErrorKind),
     DecodeError(&'static str),
     Protocol(String),
@@ -28,6 +29,7 @@ impl fmt::Display for AMQPError {
 impl error::Error for AMQPError {
     fn description<'a>(&'a self) -> &'a str {
         match *self {
+            AMQPError::TimeoutError => "operation timed out",
             AMQPError::IoError(_) => "IoError",
             AMQPError::DecodeError(err) => err,
             AMQPError::Protocol(ref err) => err,
